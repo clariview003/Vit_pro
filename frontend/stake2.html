@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CEO Stakeholder Dashboard (Interactive)</title>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PapaParse -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- Chart.js Datalabels Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <style>
+    body {
+      background: linear-gradient(180deg, #06181a 0%, #0b1f22 100%);
+      color: #e6f1f1;
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      width: 100%;
+      max-width: 1400px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #26d0ce, #1a75ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Stats Row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      width: 100%;
+      max-width: 1400px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #123334, #0c2425);
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      color: #fff;
+      font-weight: 600;
+      box-shadow: inset -2px -2px 6px rgba(255, 255, 255, 0.05),
+                  inset 2px 2px 6px rgba(0, 0, 0, 0.4);
+      transition: background 0.3s ease;
+    }
+
+    .stat-card:hover {
+      background: linear-gradient(135deg, #1a4546, #0f2d2f);
+    }
+
+    .stat-title {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .stat-value {
+      font-size: 22px;
+      margin-top: 8px;
+      font-weight: 700;
+      color: #26d0ce;
+    }
+
+    /* Dashboard Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr; /* make left panel bigger */
+      gap: 24px;
+      max-width: 1400px;
+      width: 100%;
+    }
+
+    /* Glassmorphism panels */
+    .panel {
+      background: rgba(16, 53, 56, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+    }
+
+    .panel:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
+    }
+
+    /* File input */
+    input[type="file"] {
+      background: #0f2b2c;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 10px;
+      border-radius: 10px;
+      color: #e6f1f1;
+      cursor: pointer;
+      transition: background 0.25s;
+      margin-bottom: 20px;
+    }
+
+    input[type="file"]:hover {
+      background: #123334;
+    }
+
+    /* Buttons */
+    button, .logout-btn {
+      background: linear-gradient(90deg, #26d0ce, #1a75ff);
+      border: none;
+      padding: 10px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      transition: transform 0.25s, box-shadow 0.25s;
+    }
+
+    button:hover, .logout-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 15px rgba(26, 117, 255, 0.4);
+    }
+
+    /* Chart containers */
+    .chart-container-bar {
+      width: 100%;
+      height: 400px; /* bigger bar chart */
+    }
+
+    .chart-container-pie {
+      width: 100%;
+      max-width: 350px; /* smaller pie chart */
+      aspect-ratio: 1/1;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>CEO Stakeholder Dashboard</h1>
+  </div>
+
+  <!-- Stats Row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-title">Impressions</div>
+      <div class="stat-value" id="statImpressions">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-title">Clicks</div>
+      <div class="stat-value" id="statClicks">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-title">Conversion Rate (avg)</div>
+      <div class="stat-value" id="statConv">0%</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-title">Total Spend</div>
+      <div class="stat-value" id="statSpend">₹0</div>
+    </div>
+  </div>
+
+  <!-- ✅ Fixed accept to allow CSV -->
+  <input type="file" id="csvFile" accept=".csv,.txt" />
+
+  <div class="grid">
+    <div class="panel">
+      <strong>Average Conversion Rate by Channel Used</strong>
+      <div class="chart-container-bar">
+        <canvas id="conversionChart"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <strong>Total Clicks by Gender and Age Group</strong>
+      <div class="chart-container-pie">
+        <canvas id="clicksChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let conversionChart, clicksChart;
+
+    // Create charts
+    function createCharts() {
+      if (conversionChart) conversionChart.destroy();
+      if (clicksChart) clicksChart.destroy();
+
+      conversionChart = new Chart(document.getElementById('conversionChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Average Conversion Rate',
+            data: [],
+            backgroundColor: 'rgba(38,208,206,0.7)',
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: true, labels: { color: '#ffffff' } } },
+          scales: {
+            x: {
+              title: { display: true, text: 'Channel Used', color: '#ffffff', font: { size: 14 } },
+              ticks: { color: '#ffffff', maxRotation: 0, minRotation: 0, autoSkip: false, font: { size: 12 } }
+            },
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Conversion Rate', color: '#ffffff', font: { size: 14 } },
+              ticks: { color: '#ffffff' }
+            }
+          }
+        }
+      });
+
+      clicksChart = new Chart(document.getElementById('clicksChart').getContext('2d'), {
+        type: 'pie',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Total Clicks',
+            data: [],
+            backgroundColor: [],
+            borderColor: '#ffffff',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'top', labels: { color: '#ffffff' } },
+            datalabels: {
+              formatter: (value) => value.toLocaleString(),
+              color: '#ffffff',
+              font: { weight: 'bold' }
+            }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+    }
+
+    createCharts();
+
+    // Parse numbers safely
+    const parseNum = v => {
+      if (!v) return NaN;
+      v = ('' + v).replace(/[^0-9.-]+/g, '');
+      return v === '' ? NaN : parseFloat(v);
+    }
+
+    // Process uploaded data
+    function processData(raw) {
+      if (!raw || raw.length < 2) return;
+      const headers = raw[0].map(h => h.toLowerCase().trim());
+      const rows = raw.slice(1).filter(r => r.length > 0);
+
+      const idx = {
+        channel_used: headers.findIndex(h => h.includes('channel_used')),
+        target_audience: headers.findIndex(h => h.includes('target_audience')),
+        conversion_rate: headers.findIndex(h => h.includes('conversion_rate')),
+        clicks: headers.findIndex(h => h.includes('clicks')),
+        impressions: headers.findIndex(h => h.includes('impressions')),
+        spend: headers.findIndex(h => h.includes('spend'))
+      };
+
+      // Aggregate for Conversion Rate by Channel
+      const conversionByChannel = {};
+      let totalConv = 0, convCount = 0;
+      rows.forEach(r => {
+        const channel = r[idx.channel_used] || 'Unknown';
+        const conversion = parseNum(r[idx.conversion_rate]);
+        if (!isNaN(conversion)) {
+          if (!conversionByChannel[channel]) conversionByChannel[channel] = { sum: 0, count: 0 };
+          conversionByChannel[channel].sum += conversion;
+          conversionByChannel[channel].count += 1;
+          totalConv += conversion;
+          convCount++;
+        }
+      });
+
+      const conversionLabels = Object.keys(conversionByChannel).sort();
+      const conversionData = conversionLabels.map(channel => (conversionByChannel[channel].sum / conversionByChannel[channel].count).toFixed(3));
+
+      // Aggregate Clicks by Group
+      const clicksByGroup = {};
+      let totalClicks = 0, totalImpressions = 0, totalSpend = 0;
+      rows.forEach(r => {
+        const audience = r[idx.target_audience] || '';
+        const clicks = parseNum(r[idx.clicks]);
+        const impressions = parseNum(r[idx.impressions]);
+        const spend = parseNum(r[idx.spend]);
+
+        if (!isNaN(clicks)) totalClicks += clicks;
+        if (!isNaN(impressions)) totalImpressions += impressions;
+        if (!isNaN(spend)) totalSpend += spend;
+
+        if (!isNaN(clicks) && (audience.includes('Men') || audience.includes('Women'))) {
+          if (!audience.includes('All Ages')) {
+            if (!clicksByGroup[audience]) clicksByGroup[audience] = 0;
+            clicksByGroup[audience] += clicks;
+          }
+        }
+      });
+
+      const clicksLabels = Object.keys(clicksByGroup).sort();
+      const clicksData = clicksLabels.map(group => Math.round(clicksByGroup[group]));
+      const clicksColors = clicksLabels.map(group => {
+        if (group.includes('Men 18-24')) return '#1e90ff';
+        if (group.includes('Men 25-34')) return '#4169e1';
+        if (group.includes('Men 35-44')) return '#6495ed';
+        if (group.includes('Women 18-24')) return '#800080';
+        if (group.includes('Women 25-34')) return '#9932cc';
+        if (group.includes('Women 35-44')) return '#ba55d3';
+        return '#ffffff';
+      });
+
+      // Update charts
+      conversionChart.data.labels = conversionLabels;
+      conversionChart.data.datasets[0].data = conversionData;
+      conversionChart.update();
+
+      clicksChart.data.labels = clicksLabels;
+      clicksChart.data.datasets[0].data = clicksData;
+      clicksChart.data.datasets[0].backgroundColor = clicksColors;
+      clicksChart.update();
+
+      // Update Stat Cards
+      document.getElementById("statImpressions").textContent = totalImpressions.toLocaleString();
+      document.getElementById("statClicks").textContent = totalClicks.toLocaleString();
+      document.getElementById("statConv").textContent = convCount ? ((totalConv / convCount).toFixed(2) + "%") : "0%";
+      document.getElementById("statSpend").textContent = "₹" + totalSpend.toLocaleString();
+    }
+
+    // File upload listener
+    document.getElementById('csvFile').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      Papa.parse(file, {
+        complete: res => processData(res.data),
+        skipEmptyLines: true
+      });
+    });
+  </script>
+</body>
+</html>
+<!-- Logout button -->
+<a href="index.html" class="logout-btn">Logout</a>
+
+<style>
+  .logout-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: #ff4d4d;
+    color: #fff;
+    text-decoration: none;
+    padding: 8px 14px;
+    font-size: 14px;
+    border-radius: 6px;
+    transition: background 0.3s;
+  }
+  .logout-btn:hover {
+    background: #cc0000;
+  }
+</style>
+

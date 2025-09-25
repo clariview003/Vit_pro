@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>User Self-Service Dashboard (INR Version)</title>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PapaParse -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- Chart.js Datalabels Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <style>
+    body {
+      background: linear-gradient(180deg, #072426 0%, #0f2b2c 100%);
+      color: #ffffff;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+    .header {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .user-info span {
+      font-weight: bold;
+      font-size: 18px;
+    }
+    .logout-btn {
+      background: #ff4d4d;
+      color: #ffffff;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .logout-btn:hover {
+      background: #cc0000;
+    }
+    .welcome {
+      text-align: left;
+      margin-bottom: 30px;
+      font-size: 20px;
+      max-width: 1200px;
+      width: 100%;
+    }
+    .stats-grid {
+      display: flex;
+      justify-content: flex-start;
+      max-width: 1200px;
+      width: 100%;
+      margin-bottom: 40px;
+      gap: 20px;
+    }
+    .stat-card {
+      background: #103538;
+      border-radius: 15px;
+      padding: 25px;
+      text-align: center;
+      flex: 0 0 200px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 200px;
+    }
+    .stat-value {
+      font-size: 40px;
+      font-weight: bold;
+      color: #26d0ce;
+    }
+    .stat-label {
+      font-size: 16px;
+      opacity: 0.8;
+      margin-top: 10px;
+      white-space: nowrap;
+    }
+    .upcoming-section {
+      max-width: 1200px;
+      width: 100%;
+      background: #103538;
+      border-radius: 15px;
+      padding: 25px;
+      margin-bottom: 40px;
+    }
+    .upcoming-title {
+      margin-top: 0;
+      color: #26d0ce;
+      font-size: 22px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 15px;
+      text-align: left;
+      border-bottom: 2px solid #2a5a5a;
+    }
+    th {
+      background: #072426;
+      color: #26d0ce;
+      font-size: 16px;
+    }
+    tr:hover {
+      background: rgba(38, 208, 206, 0.1);
+    }
+    .chart-section {
+      max-width: 1200px;
+      width: 100%;
+      background: #103538;
+      border-radius: 15px;
+      padding: 25px;
+    }
+    .chart-title {
+      color: #26d0ce;
+      margin-top: 0;
+      text-align: left;
+      font-size: 22px;
+    }
+    .chart-container {
+      width: 500px;
+      height: 500px;
+      aspect-ratio: 1 / 1;
+      margin: 20px 0;
+    }
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    input[type="file"] {
+      margin: 15px 0;
+      padding: 10px;
+      background: #103538;
+      color: #ffffff;
+      border: 2px solid #2a5a5a;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .alert {
+      background: rgba(255, 193, 7, 0.2);
+      border: 2px solid #ffc107;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      text-align: left;
+      color: #ffc107;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>User Self-Service Dashboard</h1>
+    <div class="user-info">
+      <span>Jane User</span>
+      <button class="logout-btn" onclick="alert('Logged out successfully!')">Logout</button>
+    </div>
+  </div>
+  <div class="welcome">
+    <h2>Upload your CSV file to update your campaign insights. </h2>
+    <div class="alert" id="anomalyAlert" style="display: none;">
+      ⚠ Anomaly detected: Check unusual performance in recent campaigns.
+    </div>
+  </div>
+  <input type="file" id="csvFile" accept=".csv,.txt" />
+
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+      <div class="stat-value" id="totalClicks">0</div>
+      <div class="stat-label">Total Clicks</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="totalSpend">₹0</div>
+      <div class="stat-label">Total Spend</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="conversions">0</div>
+      <div class="stat-label">Conversions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="roi">0.0</div>
+      <div class="stat-label">Avg ROI</div>
+    </div>
+  </div>
+
+  <div class="upcoming-section" id="upcomingSection">
+    <h3 class="upcoming-title">Upcoming Campaigns (Starting After Sep 25, 2025)</h3>
+    <table id="upcomingTable">
+      <thead>
+        <tr>
+          <th>Campaign ID</th>
+          <th>Type</th>
+          <th>Start Date</th>
+          <th>Target Audience</th>
+          <th>Channel</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Populated dynamically -->
+      </tbody>
+    </table>
+  </div>
+
+  <div class="chart-section" id="chartSection">
+    <h3 class="chart-title">Your Campaign Performance by Type</h3>
+    <div class="chart-container">
+      <canvas id="performanceChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    let performanceChart;
+
+    // Create doughnut chart with empty data initially
+    function createChart() {
+      if (performanceChart) performanceChart.destroy();
+
+      performanceChart = new Chart(document.getElementById('performanceChart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Performance Share',
+            data: [],
+            backgroundColor: ['#1e90ff', '#4169e1', '#9932cc', '#ba55d3'],
+            borderColor: '#ffffff',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#ffffff', padding: 20 } },
+            datalabels: {
+              formatter: (value) => value + '%',
+              color: '#ffffff',
+              font: { weight: 'bold', size: 16 }
+            }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+    }
+
+    createChart();
+
+    // Parse numbers safely
+    const parseNum = v => {
+      if (!v) return NaN;
+      v = ('' + v).replace(/[^0-9.-]+/g, '');
+      return v === '' ? NaN : parseFloat(v);
+    };
+
+    // Parse dates
+    const parseDate = d => {
+      if (!d) return null;
+      // Handle formats like '28-09-2025'
+      const parts = d.split('-');
+      if (parts.length === 3) {
+        return new Date(parts[2], parts[1] - 1, parts[0]);
+      }
+      return new Date(d);
+    };
+
+    // Process uploaded data
+    function processData(raw) {
+      if (!raw || raw.length < 2) return;
+      const headers = raw[0].map(h => h.toLowerCase().trim());
+      const rows = raw.slice(1).filter(r => r.length > 0);
+
+      // Detect column indices
+      const idx = {
+        clicks: headers.findIndex(h => h.includes('clicks')),
+        total_spend: headers.findIndex(h => h.includes('total spend')),
+        conversion_rate: headers.findIndex(h => h.includes('conversion_rate')),
+        roi: headers.findIndex(h => h.includes('roi')),
+        campaign_id: headers.findIndex(h => h.includes('campaign_id')),
+        campaign_type: headers.findIndex(h => h.includes('campaign_type')),
+        passing_date: headers.findIndex(h => h.includes('passing date')),
+        target_audience: headers.findIndex(h => h.includes('target_audience')),
+        channel_used: headers.findIndex(h => h.includes('channel_used')),
+        engagement_score: headers.findIndex(h => h.includes('engagement_score'))
+      };
+
+      // Aggregate user stats
+      let totalClicks = 0;
+      let totalSpend = 0;
+      let totalConversions = 0;
+      let avgRoi = 0;
+      let conversionCount = 0;
+      const performanceByType = {};
+      let anomalyDetected = false;
+
+      rows.forEach(r => {
+        const clicks = parseNum(r[idx.clicks]);
+        const spend = parseNum(r[idx.total_spend]);
+        const convRate = parseNum(r[idx.conversion_rate]);
+        const roi = parseNum(r[idx.roi]);
+        const engagement = parseNum(r[idx.engagement_score]);
+        const type = r[idx.campaign_type] || 'Other';
+
+        if (!isNaN(clicks)) totalClicks += clicks;
+        if (!isNaN(spend)) totalSpend += spend;
+        if (!isNaN(roi)) {
+          avgRoi += roi;
+          conversionCount++;
+        }
+        if (!isNaN(convRate) && convRate > 0.1) totalConversions += convRate * clicks; // Approx conversions
+
+        // Performance by type
+        if (!isNaN(clicks)) {
+          if (!performanceByType[type]) performanceByType[type] = 0;
+          performanceByType[type] += clicks;
+        }
+
+        // Simple anomaly: High engagement variance (flag if >10)
+        if (!isNaN(engagement) && engagement > 10) anomalyDetected = true;
+      });
+
+      avgRoi = conversionCount > 0 ? (avgRoi / conversionCount).toFixed(1) : 0;
+      totalConversions = Math.round(totalConversions);
+
+      // Update stats
+      document.getElementById('totalClicks').textContent = totalClicks.toLocaleString();
+
+      // ✅ Convert USD → INR (fixed rate)
+      const usdToInrRate = 83; 
+      const totalSpendInInr = totalSpend * usdToInrRate;
+      document.getElementById('totalSpend').textContent = '₹' + totalSpendInInr.toLocaleString('en-IN');
+
+      document.getElementById('conversions').textContent = totalConversions.toLocaleString();
+      document.getElementById('roi').textContent = avgRoi;
+
+      // Anomaly alert
+      const alertDiv = document.getElementById('anomalyAlert');
+      if (anomalyDetected) {
+        alertDiv.style.display = 'block';
+      } else {
+        alertDiv.style.display = 'none';
+      }
+
+      // Upcoming campaigns (Passing Date > Sep 25, 2025)
+      const upcomingCampaigns = [];
+      const currentDate = new Date('2025-09-25');
+      rows.forEach(r => {
+        const passingDate = parseDate(r[idx.passing_date]);
+        if (passingDate && passingDate > currentDate) {
+          upcomingCampaigns.push({
+            id: r[idx.campaign_id] || 'N/A',
+            type: r[idx.campaign_type] || 'N/A',
+            date: passingDate,
+            target: r[idx.target_audience] || 'N/A',
+            channel: r[idx.channel_used] || 'N/A'
+          });
+        }
+      });
+
+      // Sort by date
+      upcomingCampaigns.sort((a, b) => a.date - b.date);
+
+      // Update table
+      const tbody = document.querySelector('#upcomingTable tbody');
+      tbody.innerHTML = '';
+      upcomingCampaigns.slice(0, 10).forEach(campaign => { // Show top 10
+        const row = tbody.insertRow();
+        row.insertCell(0).textContent = campaign.id;
+        row.insertCell(1).textContent = campaign.type;
+        row.insertCell(2).textContent = campaign.date.toLocaleDateString();
+        row.insertCell(3).textContent = campaign.target;
+        row.insertCell(4).textContent = campaign.channel;
+      });
+
+      // Update performance chart
+      const labels = Object.keys(performanceByType);
+      const data = Object.values(performanceByType);
+      const total = data.reduce((sum, val) => sum + val, 0);
+      const percentages = data.map(d => total > 0 ? ((d / total) * 100).toFixed(0) : 0);
+      performanceChart.data.labels = labels;
+      performanceChart.data.datasets[0].data = percentages;
+      performanceChart.update();
+    }
+
+    // File upload listener
+    document.getElementById('csvFile').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      Papa.parse(file, {
+        complete: res => processData(res.data),
+        skipEmptyLines: true
+      });
+    });
+  </script>
+</body>
+</html>
+<a href="index.html" class="logout-btn">Logout</a>
+
+<style>
+  .logout-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: #ff4d4d;
+    color: #fff;
+    text-decoration: none;
+    padding: 8px 14px;
+    font-size: 14px;
+    border-radius: 6px;
+    transition: background 0.3s;
+  }
+  .logout-btn:hover {
+    background: #cc0000;
+  }
+</style>
+
+

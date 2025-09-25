@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CEO Stakeholder Dashboard</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Tailwind for styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      background: linear-gradient(180deg, #0f2027, #203a43, #2c5364);
+      color: white;
+      font-family: 'Inter', sans-serif;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      transition: 0.3s;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+    }
+  </style>
+</head>
+<body class="p-6">
+
+  <!-- Header -->
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">CEO Stakeholder Dashboard</h1>
+    <span class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full font-semibold">
+      Role: CEO
+    </span>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+    <div class="card text-center">
+      <h2 class="text-lg">Total Revenue</h2>
+      <p id="revenue" class="text-2xl font-bold mt-2">₹0</p>
+    </div>
+    <div class="card text-center">
+      <h2 class="text-lg">Total Spend</h2>
+      <p id="spend" class="text-2xl font-bold mt-2">₹0</p>
+    </div>
+    <div class="card text-center">
+      <h2 class="text-lg">ROI</h2>
+      <p id="roi" class="text-2xl font-bold mt-2">0%</p>
+    </div>
+    <div class="card text-center">
+      <h2 class="text-lg">CAC</h2>
+      <p id="cac" class="text-2xl font-bold mt-2">₹0</p>
+    </div>
+    <div class="card text-center">
+      <h2 class="text-lg">Overall Conv. Rate</h2>
+      <p id="convRate" class="text-2xl font-bold mt-2">0%</p>
+    </div>
+  </div>
+
+  <!-- Charts Section -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <div class="card">
+      <h2 class="text-xl mb-2">Revenue vs Spend Trend</h2>
+      <canvas id="revenueSpendChart"></canvas>
+    </div>
+    <div class="card">
+      <h2 class="text-xl mb-2">Conversion Rate Trend</h2>
+      <canvas id="convRateChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Insights -->
+  <div class="card mb-6">
+    <h2 class="text-xl mb-2">Key Insights</h2>
+    <ul class="list-disc ml-6 text-gray-200">
+      <li>Automates manual report distribution to stakeholders.</li>
+      <li>Tracks real-time ROI and CAC for quick business decisions.</li>
+      <li>Aggregates campaign data across companies & channels.</li>
+      <li>Eliminates inefficiencies of exporting & emailing reports.</li>
+      <li>Supports future growth with centralized reporting.</li>
+    </ul>
+  </div>
+
+  <!-- File Upload -->
+  <div class="card text-center">
+    <h2 class="text-xl mb-4">Upload Campaign Dataset (CSV)</h2>
+    <input type="file" id="fileInput" accept=".csv" class="mb-4"/>
+    <button onclick="processCSV()" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded text-white">
+      Process Data
+    </button>
+  </div>
+
+  <script>
+    let revenueSpendChart, convRateChart;
+
+    function processCSV() {
+      const fileInput = document.getElementById('fileInput').files[0];
+      if (!fileInput) {
+        alert("Please upload a CSV file.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const text = e.target.result;
+        const rows = text.split("\n").map(r => r.split(","));
+        const headers = rows[0];
+        const data = rows.slice(1);
+
+        let totalRevenue = 0, totalSpend = 0, totalConversions = 0, totalClicks = 0, totalCustomers = 0;
+
+        let dates = [], revenues = [], spends = [], convRates = [];
+
+        data.forEach(row => {
+          const obj = {};
+          headers.forEach((h, i) => obj[h.trim()] = row[i]?.trim());
+
+          let revenue = parseFloat(obj["Revenue"] || 0);
+          let spend = parseFloat(obj["Spend"] || 0);
+          let conversions = parseInt(obj["Conversions"] || 0);
+          let clicks = parseInt(obj["Clicks"] || 0);
+          let customers = parseInt(obj["Customers"] || 0);
+
+          totalRevenue += revenue;
+          totalSpend += spend;
+          totalConversions += conversions;
+          totalClicks += clicks;
+          totalCustomers += customers;
+
+          if (obj["Date"]) {
+            dates.push(obj["Date"]);
+            revenues.push(revenue);
+            spends.push(spend);
+            convRates.push(clicks > 0 ? (conversions / clicks) * 100 : 0);
+          }
+        });
+
+        // KPIs
+        document.getElementById("revenue").innerText = "₹" + totalRevenue.toLocaleString();
+        document.getElementById("spend").innerText = "₹" + totalSpend.toLocaleString();
+        document.getElementById("roi").innerText = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend * 100).toFixed(2) + "%" : "0%";
+        document.getElementById("cac").innerText = totalCustomers > 0 ? "₹" + (totalSpend / totalCustomers).toFixed(2) : "₹0";
+        document.getElementById("convRate").innerText = totalClicks > 0 ? ((totalConversions / totalClicks) * 100).toFixed(2) + "%" : "0%";
+
+        // Charts
+        if (revenueSpendChart) revenueSpendChart.destroy();
+        if (convRateChart) convRateChart.destroy();
+
+        const ctx1 = document.getElementById("revenueSpendChart").getContext("2d");
+        revenueSpendChart = new Chart(ctx1, {
+          type: "line",
+          data: {
+            labels: dates,
+            datasets: [
+              { label: "Revenue", data: revenues, borderColor: "lime", fill: false },
+              { label: "Spend", data: spends, borderColor: "red", fill: false }
+            ]
+          }
+        });
+
+        const ctx2 = document.getElementById("convRateChart").getContext("2d");
+        convRateChart = new Chart(ctx2, {
+          type: "bar",
+          data: {
+            labels: dates,
+            datasets: [{ label: "Conversion Rate (%)", data: convRates, backgroundColor: "cyan" }]
+          }
+        });
+      };
+      reader.readAsText(fileInput);
+    }
+  </script>
+</body>
+</html>
+<a href="index.html" class="logout-btn">Logout</a>
+
+<style>
+  .logout-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: #ff4d4d;
+    color: #fff;
+    text-decoration: none;
+    padding: 8px 14px;
+    font-size: 14px;
+    border-radius: 6px;
+    transition: background 0.3s;
+  }
+  .logout-btn:hover {
+    background: #cc0000;
+  }
+</style>
+

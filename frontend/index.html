@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-User Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen flex items-center justify-center bg-gray-100">
+  <div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+    <h2 class="text-2xl font-bold text-center mb-6">Login</h2>
+
+    <form id="loginForm" class="space-y-4">
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Username</label>
+        <input type="text" id="username" required
+          class="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400" />
+      </div>
+
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Password</label>
+        <input type="password" id="password" required
+          class="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400" />
+      </div>
+
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Login as</label>
+        <select id="role" required
+          class="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <option value="">-- Select Role --</option>
+          <option value="stakeholder">Stakeholder</option>
+          <option value="manager">Manager</option>
+          <option value="user">User</option>
+        </select>
+      </div>
+
+      
+      <button type="submit"
+        class="w-full py-2 px-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition">
+        Login
+      </button>
+    </form>
+
+    <p id="errorMsg" class="text-red-600 text-sm mt-4 hidden">Invalid credentials. Try again.</p>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

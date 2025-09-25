@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Futuristic Dashboard — Google Sheet Connected</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PapaParse (CSV parsing) -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: "Poppins", sans-serif;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      color: #f1f1f1;
+      min-height: 100vh;
+      display: flex;
+    }
+    aside {
+      width: 300px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(12px);
+      padding: 20px;
+      transition: width 0.3s ease;
+      box-shadow: 3px 0 12px rgba(0,0,0,0.4);
+    }
+    aside h2 { font-size:18px; margin:0 0 10px 0; }
+    .control { margin-bottom:12px; }
+    .control label { display:block; font-size:13px; color:#cfcfcf; margin-bottom:6px; }
+    .control select, .control input[type="file"], .control input[type="number"], .control input[type="date"], .control input[type="text"] {
+      width:100%; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.04); color:#8fb0f0;
+    }
+    .control .range-row { display:flex; gap:8px; }
+    .btn { display:inline-block; margin-top:8px; padding:8px 12px; border-radius:8px; border:none; cursor:pointer; background:linear-gradient(90deg,#00c6ff,#0072ff); color:#fff; font-weight:700; }
+    .linkish { background:transparent; border:1px dashed rgba(255,255,255,0.08); padding:8px; border-radius:8px; color:#fff; display:block; text-decoration:none; text-align:center; }
+    main { flex:1; padding:28px; overflow:auto; }
+    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+    header h1 { font-size:26px; }
+    .role { background:linear-gradient(90deg,#ff6a00,#ee0979); padding:6px 14px; border-radius:20px; font-size:14px; font-weight:600; }
+
+    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:18px; margin-bottom:20px; }
+    .kpi-card { padding:18px; border-radius:14px; background:rgba(255,255,255,0.06); backdrop-filter:blur(6px); box-shadow: inset 0 0 12px rgba(255,255,255,0.03); }
+    .kpi-card p { margin:0; font-size:13px; color:#cfcfcf; }
+    .kpi-card h2 { margin:8px 0 0 0; font-size:22px;  }
+
+    .chart-container { padding:18px; border-radius:14px; background:rgba(255,255,255,0.06); }
+    .filters-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+    .status-badge { padding:6px 10px; border-radius:999px; font-weight:700; font-size:13px; display:inline-block; margin-right:8px; }
+    .status-upcoming { background:#ffb86b; color:#000; }
+    .status-ongoing { background:#7efc6a; color:#000; }
+    .status-completed { background:#8aa9ff; color:#000; }
+
+    table { width:100%; border-collapse:collapse; margin-top:16px; font-size:13px; }
+    th, td { padding:8px 10px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.04); color:#ddd; }
+    th { color:#fff; font-weight:700; background:rgba(0,0,0,0.2); position:sticky; top:0; }
+
+    footer { margin-top:18px; color:#aaa; font-size:13px; }
+    .small { font-size:12px; color:#bdbdbd; }
+
+    @media (max-width:900px) {
+      aside { display:none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar / Controls -->
+  <aside>
+    <h2>Campaign Data</h2>
+
+    <div class="control">
+      <label>Load dataset from published Google Sheet</label>
+      <button id="loadSheetBtn" class="btn">Load Published Sheet</button>
+      <div class="small" style="margin-top:6px;">Using the sheet you published.</div>
+    </div>
+    
+
+    <div class="control">
+      <label>Or upload CSV</label>
+      <input id="fileInput" type="file" accept=".csv" />
+    </div>
+
+    <hr style="opacity:0.08;margin:12px 0;" />
+
+    <div class="control">
+      <label>Company</label>
+      <select id="filterCompany"><option value="">All Companies</option></select>
+    </div>
+
+    <div class="control">
+      <label>Duration</label>
+      <select id="filterDuration"><option value="">All Durations</option></select>
+    </div>
+
+    <div class="control">
+      <label>Channel</label>
+      <select id="filterChannel"><option value="">All Channels</option></select>
+    </div>
+    <hr style="opacity:0.08;margin:14px 0;" />
+    <h2>Email Distribution</h2>
+    <div class="control">
+      <label>Recipients</label>
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+        <input id="recipientCount" type="number" min="1" value="1" style="max-width:90px;" />
+        <button id="setRecipientCount" class="btn" style="padding:6px 10px;">Set Count</button>
+        <button id="addRecipient" class="btn" style="padding:6px 10px; background:linear-gradient(90deg,#34d399,#059669);">Add</button>
+        <button id="removeRecipient" class="btn" style="padding:6px 10px; background:linear-gradient(90deg,#f43f5e,#be123c);">Remove</button>
+      </div>
+      <div id="recipientsWrap" style="display:flex; flex-direction:column; gap:6px;"></div>
+    </div>
+
+    <div class="control">
+      <label>Subject</label>
+      <input id="emailSubject" type="text" placeholder="Dashboard Report" />
+    </div>
+
+    <div class="control">
+      <label>Message</label>
+      <input id="emailBody" type="text" placeholder="Automated report attached." />
+    </div>
+
+    <div class="control">
+      <label>Schedule time (T-1s capture, auto-email)</label>
+      <input id="scheduleTime" type="datetime-local" />
+      <button id="schedulePackageBtn" class="btn">Schedule Email</button>
+      <button id="downloadNowBtn" class="btn" style="background:rgba(255,255,255,0.12); color:#fff;">Download Now</button>
+      <div id="emailStatus" class="small" style="margin-top:6px; color:#8fb0f0;"></div>
+      <div class="small" style="opacity:0.8; margin-top:6px;">Emails sent via local server if available.</div>
+    </div>
+
+    <div class="control">
+      <label>Date range (campaign start/end or passing date)</label>
+      <input id="dateFrom" type="date" />
+      <input id="dateTo" type="date" style="margin-top:8px;" />
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:8px;">
+      <button id="applyFilters" class="btn">Apply</button>
+      <button id="clearFilters" class="btn" style="background:rgba(255,255,255,0.12); color:#fff;">Clear</button>
+    </div>
+
+    <hr style="opacity:0.08;margin:14px 0;" />
+
+    <div class="control">
+      <label>Quick actions</label>
+      <a id="downloadFiltered" class="linkish" href="#">Download filtered CSV</a>
+    </div>
+
+    
+  </aside>
+
+  <!-- Main content -->
+  <main>
+    <header>
+      <h1>Automated Campaign Dashboard</h1>
+      <span class="role">Role: Campaign Manager</span>
+    </header>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <p>Impressions</p>
+        <h2 id="impressions">0</h2>
+      </div>
+      <div class="kpi-card">
+        <p>Clicks</p>
+        <h2 id="clicks">0</h2>
+      </div>
+      <div class="kpi-card">
+        <p>Conversion Rate (avg)</p>
+        <h2 id="ctr">0%</h2>
+      </div>
+      <div class="kpi-card">
+        <p>Total Spend </p>
+        <h2 id="spend">₹0</h2>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <h2>Spend Trend (aggregated)</h2>
+      <canvas id="liveChart" height="120"></canvas>
+      <p style="font-size:12px; color:#aaa; margin-top:8px;">Chart shows spend aggregated by date for filtered campaigns.</p>
+      <div class="filters-row" style="margin-top:12px;">
+        <span id="statusSummary" class="small"></span>
+      </div>
+    </div>
+
+    <div style="margin-top:18px;" class="chart-container">
+      <h2>Campaign Table</h2>
+      <div id="tableWrap" style="overflow:auto; max-height:360px;">
+        <table id="dataTable">
+          <thead><tr id="theadRow"></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <footer>
+      <div class="small">Data source: Published Google Sheet</div>
+    </footer>
+  </main>
+
+  <script>
+    // -------------------------
+    // CONFIG
+    // -------------------------
+    // Published CSV URL derived from your published sheet:
+    const PUBLISHED_CSV = "";
+
+    // Fixed today date per your instruction
+    const FIXED_TODAY = new Date("2025-09-25T00:00:00");
+
+    // -------------------------
+    // Utilities
+    // -------------------------
+    function getField(headers, variants) {
+      // try to find header name that matches variants (case-insensitive, trimmed)
+      const normalized = headers.map(h => (h || "").toString().trim().toLowerCase());
+      for (const v of variants) {
+        const idx = normalized.indexOf(v.toLowerCase());
+        if (idx >= 0) return headers[idx];
+      }
+      return null;
+    }
+
+    function parseNumber(val) {
+      if (val == null || val === "") return NaN;
+      // remove currency/commas
+      return Number(String(val).replace(/[₹,$\s]/g, "").replace(/,/g,""));
+    }
+
+    function parsePercent(val) {
+      if (val == null || val === "") return NaN;
+      return Number(String(val).replace("%", "").trim());
+    }
+
+    function tryParseDate(val) {
+      if (!val) return null;
+      // If CSV uses dd-mm-yyyy or similar, try replacing - with / then Date parse
+      let s = String(val).trim();
+      // Common Google sheets outputs look like "2025-09-25" or "25-09-2025" or "9/25/2025"
+      // Try ISO first
+      let d = new Date(s);
+      if (!isNaN(d)) return d;
+      // try dd-mm-yyyy
+      const parts = s.split(/[-\/\.]/);
+      if (parts.length === 3) {
+        // detect if first part is year
+        if (parts[0].length === 4) { // yyyy-mm-dd
+          d = new Date(parts[0], Number(parts[1]) - 1, parts[2]);
+          if (!isNaN(d)) return d;
+        } else { // dd-mm-yyyy
+          d = new Date(parts[2], Number(parts[1]) - 1, parts[0]);
+          if (!isNaN(d)) return d;
+        }
+      }
+      return null;
+    }
+
+    // -------------------------
+    // Data storage
+    // -------------------------
+    let rawData = []; // array of objects
+    let headers = [];
+
+    // Map fields by best-match header names
+    let FIELD = {};
+
+    // Chart
+    let chartInstance = null;
+
+    // -------------------------
+    // Load & parse CSV (from URL or File)
+    // -------------------------
+    function loadCsvFromUrl(url) {
+      Papa.parse(url, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          headers = results.meta.fields || [];
+          rawData = results.data;
+          postLoad();
+        },
+        error: function(err) {
+          alert("Failed to load CSV: " + err.message);
+          console.error(err);
+        }
+      });
+    }
+
+    function loadCsvFromFile(file) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          headers = results.meta.fields || [];
+          rawData = results.data;
+          postLoad();
+        },
+        error: function(err) {
+          alert("Failed to parse CSV file: " + err.message);
+          console.error(err);
+        }
+      });
+    }
+
+    // after load: detect fields, populate filters, render defaults
+    function postLoad() {
+      detectFields();
+      populateFilterOptions();
+      applyFiltersAndRender();
+    }
+
+    // Try to detect column headers for commonly used names
+    function detectFields() {
+      const h = headers.map(x => x || "");
+      FIELD = {
+        company: getField(h, ["Company", "company", "Company Name", "Company_Name", "company_name"]),
+        duration: getField(h, ["Duration", "duration", "Campaign_Duration", "campaign_duration"]),
+        channel: getField(h, ["Channel", "Channel_Used", "Channel Used", "channel", "channel_used"]),
+        conv: getField(h, ["Conversion_Rate", "Conversion Rate", "ConversionRate", "conv", "Conversion_Rate_%"]),
+        roi: getField(h, ["ROI", "R_O_I", "Return on Investment", "roi"]),
+        acq: getField(h, ["Acquisition_Cost", "Acquisition Cost", "Acq_Cost", "acquisition_cost"]),
+        impressions: getField(h, ["Impressions", "impressions", "Impression"]),
+        clicks: getField(h, ["Clicks", "clicks", "Click"]),
+        startDate: getField(h, ["Start Date", "Start_Date", "StartDate", "Start"]),
+        endDate: getField(h, ["End Date", "End_Date", "EndDate", "End"]),
+        passDate: getField(h, ["Passing Date", "Pass Date", "Passing_Date", "PassDate", "PassingDate", "Pass_Date"]),
+        campaignName: getField(h, ["Campaign_Name", "Campaign Name", "Campaign", "campaign", "Campaign_Name"]),
+        spend: getField(h, ["Spend", "spend", "Cost", "cost", "Amount", "amount", "Acquisition_Cost"])
+      };
+      console.log("Detected FIELD mapping:", FIELD);
+    }
+
+    // Fill select inputs with unique values from columns
+    function populateFilterOptions() {
+      // Unique values
+      const companies = new Set();
+      const durations = new Set();
+      const channels = new Set();
+
+      rawData.forEach(r => {
+        if (FIELD.company && r[FIELD.company]) companies.add(r[FIELD.company]);
+        if (FIELD.duration && r[FIELD.duration]) durations.add(r[FIELD.duration]);
+        if (FIELD.channel && r[FIELD.channel]) channels.add(r[FIELD.channel]);
+      });
+
+      const compSel = document.getElementById("filterCompany");
+      const durSel = document.getElementById("filterDuration");
+      const chSel = document.getElementById("filterChannel");
+
+      // clear existing (keep first option)
+      compSel.innerHTML = '<option value="">All Companies</option>';
+      durSel.innerHTML = '<option value="">All Durations</option>';
+      chSel.innerHTML = '<option value="">All Channels</option>';
+
+      Array.from(companies).sort().forEach(v => {
+        const opt = document.createElement("option"); opt.value = v; opt.textContent = v; compSel.appendChild(opt);
+      });
+      Array.from(durations).sort().forEach(v => {
+        const opt = document.createElement("option"); opt.value = v; opt.textContent = v; durSel.appendChild(opt);
+      });
+      Array.from(channels).sort().forEach(v => {
+        const opt = document.createElement("option"); opt.value = v; opt.textContent = v; chSel.appendChild(opt);
+      });
+    }
+// (Removed legacy backend email scheduler)
+
+    // Apply filters and update UI
+    function applyFiltersAndRender() {
+      if (!rawData || rawData.length === 0) return;
+
+      // read filter values
+      const fCompany = document.getElementById("filterCompany").value;
+      const fDuration = document.getElementById("filterDuration").value;
+      const fChannel = document.getElementById("filterChannel").value;
+      const dateFromVal = document.getElementById("dateFrom").value;
+      const dateToVal = document.getElementById("dateTo").value;
+      const dateFrom = dateFromVal ? new Date(dateFromVal) : null;
+      const dateTo = dateToVal ? new Date(dateToVal) : null;
+
+      // filter rows
+      let filtered = rawData.filter(row => {
+        // company
+        if (fCompany && FIELD.company && (String(row[FIELD.company]||"") !== fCompany)) return false;
+        if (fDuration && FIELD.duration && (String(row[FIELD.duration]||"") !== fDuration)) return false;
+        if (fChannel && FIELD.channel && (String(row[FIELD.channel]||"") !== fChannel)) return false;
+        
+
+        
+
+        // date range filter: check any date column we can (start,end,passDate) - if any exists within range we include
+        if (dateFrom || dateTo) {
+          let pass = false;
+          const cand = [FIELD.startDate, FIELD.endDate, FIELD.passDate];
+          for (const c of cand) {
+            if (!c) continue;
+            const d = tryParseDate(row[c]);
+            if (!d) continue;
+            if (dateFrom && d < dateFrom) continue;
+            if (dateTo && d > (new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), 23,59,59))) continue;
+            pass = true; break;
+          }
+          if (!pass) return false;
+        }
+
+        return true;
+      });
+
+      renderKpis(filtered);
+      renderChart(filtered);
+      renderTable(filtered);
+      prepareDownload(filtered);
+      renderStatusSummary(filtered);
+    }
+
+    // Render KPI cards
+    function renderKpis(rows) {
+      const totalImpr = rows.reduce((s,r) => s + (FIELD.impressions ? (parseNumber(r[FIELD.impressions]) || 0) : 0), 0);
+      const totalClicks = rows.reduce((s,r) => s + (FIELD.clicks ? (parseNumber(r[FIELD.clicks]) || 0) : 0), 0);
+      // average conversion rate (weighted by impressions if possible)
+      const convVals = rows.map(r => FIELD.conv ? parsePercent(r[FIELD.conv]) : NaN).filter(v => !isNaN(v));
+      const avgConv = convVals.length ? (convVals.reduce((a,b)=>a+b,0)/convVals.length) : 0;
+      const totalSpend = rows.reduce((s,r) => s + (FIELD.acq ? (parseNumber(r[FIELD.acq]) || 0) : 0), 0);
+
+      document.getElementById("impressions").innerText = totalImpr.toLocaleString();
+      document.getElementById("clicks").innerText = totalClicks.toLocaleString();
+      document.getElementById("ctr").innerText = avgConv ? avgConv.toFixed(2) + "%" : "0%";
+      document.getElementById("spend").innerText = "₹" + Math.round(totalSpend).toLocaleString();
+    }
+
+    // Render chart (Spend trend aggregated by date)
+    function renderChart(rows) {
+      // Choose date field preference: passDate -> startDate -> endDate
+      const dateKeyCandidates = [FIELD.passDate, FIELD.startDate, FIELD.endDate];
+      const dateKey = dateKeyCandidates.find(k => k);
+      if (!dateKey) {
+        // no date column: clear chart
+        if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+        return;
+      }
+
+      // aggregate spend per date
+      const agg = {};
+      rows.forEach(r => {
+        const d = tryParseDate(r[dateKey]);
+        if (!d) return;
+        const day = d.toISOString().slice(0,10);
+        const spend = FIELD.spend ? (parseNumber(r[FIELD.spend]) || 0) : 0;
+        agg[day] = (agg[day] || 0) + spend;
+      });
+
+      const labels = Object.keys(agg).sort();
+      const data = labels.map(l => agg[l]);
+
+      const ctx = document.getElementById("liveChart").getContext("2d");
+      if (chartInstance) chartInstance.destroy();
+
+      chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Spend (₹)",
+            data,
+            borderColor: "#00c6ff",
+            backgroundColor: "rgba(0,198,255,0.2)",
+            fill: true,
+            tension: 0.3,
+            pointBackgroundColor: "#fff",
+            pointRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { ticks: { color: "#ffb86b" }, grid: { color: "rgba(255,255,255,0.05)" } },
+            y: { ticks: { color: "#ffb86b" }, grid: { color: "rgba(255,255,255,0.05)" } }
+          },
+          plugins: { legend: { labels: { color: "#fff" } } }
+        }
+      });
+    }
+
+    // Render table
+    function renderTable(rows) {
+      const theadRow = document.getElementById("theadRow");
+      const tbody = document.getElementById("tbody");
+      theadRow.innerHTML = "";
+      tbody.innerHTML = "";
+
+      // if no data
+      if (!rows || rows.length === 0) {
+        theadRow.innerHTML = "<th>No data</th>";
+        return;
+      }
+
+      // show a subset of columns: campaign, company, channel, start, end, impressions, clicks, conv, roi, acq, status
+      const chosenCols = {
+        "Company": FIELD.company,
+        "Channel": FIELD.channel,
+        "Pass Date": FIELD.passDate,
+        "Impressions": FIELD.impressions,
+        "Clicks": FIELD.clicks,
+        "Conv (%)": FIELD.conv,
+        "ROI": FIELD.roi,
+        "Acq Cost": FIELD.acq
+      };
+
+      // create headers
+      Object.keys(chosenCols).forEach(h => {
+        const th = document.createElement("th"); th.textContent = h; theadRow.appendChild(th);
+      });
+      const thStatus = document.createElement("th"); thStatus.textContent = "Status"; theadRow.appendChild(thStatus);
+
+      // rows
+      rows.forEach(r => {
+        const tr = document.createElement("tr");
+        Object.keys(chosenCols).forEach(k => {
+          const key = chosenCols[k];
+          const td = document.createElement("td");
+          td.textContent = key ? (r[key] ?? "") : "";
+          tr.appendChild(td);
+        });
+
+        // compute status
+        const status = computeStatusForRow(r);
+        const tdStatus = document.createElement("td");
+        const span = document.createElement("span");
+        span.className = "status-badge " + (status === "Ongoing" ? "status-ongoing" : status === "Completed" ? "status-completed" : "status-upcoming");
+        span.textContent = status;
+        tdStatus.appendChild(span);
+        tr.appendChild(tdStatus);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Compute campaign status for a row using FIXED_TODAY
+    function computeStatusForRow(r) {
+      // Prefer Start/End, else Pass Date as both
+      let s = null, e = null;
+      if (FIELD.startDate) s = tryParseDate(r[FIELD.startDate]);
+      if (FIELD.endDate) e = tryParseDate(r[FIELD.endDate]);
+      if (!s && !e && FIELD.passDate) {
+        // treat passDate as end date if only one date exists
+        const p = tryParseDate(r[FIELD.passDate]);
+        if (p) { s = p; e = p; }
+      }
+      // if only start exists set end = start
+      if (s && !e) e = s;
+      // if only end exists set start = end
+      if (!s && e) s = e;
+
+      if (!s || !e) return "Unknown";
+
+      // compare dates ignoring time
+      const start = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+      const end = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+      const today = new Date(FIXED_TODAY.getFullYear(), FIXED_TODAY.getMonth(), FIXED_TODAY.getDate());
+
+      if (end < today) return "Completed";
+      if (start <= today && today <= end) return "Ongoing";
+      if (start > today) return "Upcoming";
+      return "Unknown";
+    }
+
+    // Status summary
+    function renderStatusSummary(rows) {
+      let completed = 0, ongoing = 0, upcoming = 0, unknown = 0;
+      rows.forEach(r => {
+        const s = computeStatusForRow(r);
+        if (s === "Completed") completed++;
+        else if (s === "Ongoing") ongoing++;
+        else if (s === "Upcoming") upcoming++;
+        else unknown++;
+      });
+      document.getElementById("statusSummary").innerHTML =
+        `<strong>Completed:</strong> ${completed} &nbsp; <strong>Ongoing:</strong> ${ongoing} &nbsp; <strong>Upcoming:</strong> ${upcoming} &nbsp; <span class="small"> (as of 25 Sep 2025)</span>`;
+    }
+
+    // Prepare download filtered CSV
+    function prepareDownload(rows) {
+      const link = document.getElementById("downloadFiltered");
+      if (!rows || rows.length === 0) {
+        link.href = "#"; link.download = ""; link.textContent = "No data to download";
+        return;
+      }
+      // create CSV via Papa
+      const csv = Papa.unparse(rows);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = "filtered_campaigns.csv";
+      link.textContent = "Download filtered CSV";
+    }
+
+    // -------------------------
+    // Recipient management & packaging (frontend-only)
+    // -------------------------
+    function ensureRecipientInputs(count) {
+      const wrap = document.getElementById("recipientsWrap");
+      const current = wrap.querySelectorAll('input[type="email"]').length;
+      if (count > current) {
+        for (let i = current; i < count; i++) {
+          const inp = document.createElement("input");
+          inp.type = "email";
+          inp.placeholder = `recipient${i+1}@example.com`;
+          inp.style.width = "100%";
+          wrap.appendChild(inp);
+        }
+      } else if (count < current) {
+        for (let i = current; i > count; i--) {
+          wrap.removeChild(wrap.lastElementChild);
+        }
+      }
+    }
+
+    function getRecipientEmails() {
+      return Array.from(document.querySelectorAll('#recipientsWrap input[type="email"]'))
+        .map(i => i.value.trim())
+        .filter(v => v);
+    }
+
+    function dataUrlToBlob(dataUrl) {
+      const parts = dataUrl.split(",");
+      const byteString = atob(parts[1]);
+      const mimeString = parts[0].split(":")[1].split(";")[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+      return new Blob([ab], { type: mimeString });
+    }
+
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function getDashboardScreenshotBlob() {
+      if (!chartInstance) return null;
+      const png = document.getElementById("liveChart").toDataURL("image/png");
+      return dataUrlToBlob(png);
+    }
+
+    function getFilteredCsvBlob() {
+      // Recompute current filtered rows similar to applyFiltersAndRender
+      const fCompany = document.getElementById("filterCompany").value;
+      const fDuration = document.getElementById("filterDuration").value;
+      const fChannel = document.getElementById("filterChannel").value;
+      const dateFromVal = document.getElementById("dateFrom").value;
+      const dateToVal = document.getElementById("dateTo").value;
+      const dateFrom = dateFromVal ? new Date(dateFromVal) : null;
+      const dateTo = dateToVal ? new Date(dateToVal) : null;
+      const filtered = rawData.filter(row => {
+        if (fCompany && FIELD.company && (String(row[FIELD.company]||"") !== fCompany)) return false;
+        if (fDuration && FIELD.duration && (String(row[FIELD.duration]||"") !== fDuration)) return false;
+        if (fChannel && FIELD.channel && (String(row[FIELD.channel]||"") !== fChannel)) return false;
+        if (dateFrom || dateTo) {
+          let pass = false;
+          const cand = [FIELD.startDate, FIELD.endDate, FIELD.passDate];
+          for (const c of cand) {
+            if (!c) continue;
+            const d = tryParseDate(row[c]);
+            if (!d) continue;
+            if (dateFrom && d < dateFrom) continue;
+            if (dateTo && d > (new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), 23,59,59))) continue;
+            pass = true; break;
+          }
+          if (!pass) return false;
+        }
+        return true;
+      });
+      const csv = Papa.unparse(filtered);
+      return new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    async function packageAndDownloadNow() {
+      if (!rawData || rawData.length === 0) {
+        document.getElementById("emailStatus").textContent = "Load data first to generate CSV.";
+        return;
+      }
+      const recipients = getRecipientEmails();
+      const csvBlob = getFilteredCsvBlob();
+      const pngBlob = getDashboardScreenshotBlob();
+      if (!csvBlob) {
+        document.getElementById("emailStatus").textContent = "Failed to create CSV.";
+        return;
+      }
+      const ts = new Date().toISOString().replace(/[:.]/g, "-");
+      const base = `campaign_report_${ts}`;
+      downloadBlob(csvBlob, `${base}.csv`);
+      if (pngBlob) downloadBlob(pngBlob, `${base}_dashboard.png`);
+      document.getElementById("emailStatus").textContent = recipients.length
+        ? `Prepared attachments for ${recipients.length} recipient(s).`
+        : "Prepared attachments.";
+
+      // If backend is running, also send email automatically
+      try {
+        const attachments = [];
+        const csvB64 = await blobToBase64(csvBlob);
+        attachments.push({ filename: `${base}.csv`, contentBase64: csvB64, contentType: 'text/csv' });
+        if (pngBlob) {
+          const pngB64 = await blobToBase64(pngBlob);
+          attachments.push({ filename: `${base}_dashboard.png`, contentBase64: pngB64, contentType: 'image/png' });
+        }
+        if (recipients.length) {
+          const res = await fetch('http://localhost:5000/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ recipients, subject: 'Dashboard Report', body: 'Automated report attached.', attachments })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data && data.error || 'Email send failed');
+          document.getElementById("emailStatus").textContent = `Emails sent to ${recipients.length} recipient(s).`;
+        }
+      } catch (e) {
+        console.warn('Email send skipped/failed:', e);
+      }
+    }
+
+    let scheduleTimer = null;
+    function schedulePackaging() {
+      const when = document.getElementById("scheduleTime").value;
+      if (!when) { document.getElementById("emailStatus").textContent = "Pick a schedule time."; return; }
+      const target = new Date(when).getTime();
+      const now = Date.now();
+      if (isNaN(target) || target <= now) { document.getElementById("emailStatus").textContent = "Pick a future time."; return; }
+      if (scheduleTimer) { clearTimeout(scheduleTimer); scheduleTimer = null; }
+      // Try backend scheduling first
+      const recipients = getRecipientEmails();
+      const subject = (document.getElementById('emailSubject').value || 'Dashboard Report');
+      const body = (document.getElementById('emailBody').value || 'Automated report attached.');
+      
+      // Get current filter values to send to backend
+      const filters = {
+        company: document.getElementById("filterCompany").value,
+        duration: document.getElementById("filterDuration").value,
+        channel: document.getElementById("filterChannel").value,
+        dateFrom: document.getElementById("dateFrom").value,
+        dateTo: document.getElementById("dateTo").value
+      };
+      
+      const payload = {
+        recipients,
+        timeISO: new Date(target).toISOString(),
+        subject,
+        body,
+        filters
+      };
+      fetch('http://localhost:5000/schedule-report', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      }).then(res => res.json().then(d => ({ ok: res.ok, data: d }))).then(({ ok, data }) => {
+        if (ok) {
+          const mins = Math.round((target - now) / 60000);
+          document.getElementById("emailStatus").textContent = `Email scheduled in ~${mins} min.`;
+        } else {
+          // fallback to frontend timer
+          scheduleTimer = setTimeout(() => {
+            packageAndDownloadNow();
+            scheduleTimer = null;
+          }, Math.max(0, target - now - 1000));
+          const mins = Math.round((target - now) / 60000);
+          document.getElementById("emailStatus").textContent = `Backend unavailable; local packaging scheduled in ~${mins} min.`;
+        }
+      }).catch(() => {
+        // fallback to frontend timer on error
+        scheduleTimer = setTimeout(() => {
+          packageAndDownloadNow();
+          scheduleTimer = null;
+        }, Math.max(0, target - now - 1000));
+        const mins = Math.round((target - now) / 60000);
+        document.getElementById("emailStatus").textContent = `Backend unreachable; local packaging scheduled in ~${mins} min.`;
+      });
+    }
+
+    // -------------------------
+    // Wire up UI events
+    // -------------------------
+    document.getElementById("loadSheetBtn").addEventListener("click", () => {
+      loadCsvFromUrl(PUBLISHED_CSV);
+    });
+
+    document.getElementById("fileInput").addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      loadCsvFromFile(f);
+    });
+    
+    
+
+    document.getElementById("applyFilters").addEventListener("click", () => applyFiltersAndRender());
+    document.getElementById("clearFilters").addEventListener("click", () => {
+      // clear UI fields
+      document.getElementById("filterCompany").value = "";
+      document.getElementById("filterDuration").value = "";
+      document.getElementById("filterChannel").value = "";
+      ["dateFrom","dateTo"].forEach(id => {
+        document.getElementById(id).value = "";
+      });
+      applyFiltersAndRender();
+    });
+
+    // load automatically on open
+    window.addEventListener("load", () => {
+      // init recipients UI
+      ensureRecipientInputs(Number(document.getElementById("recipientCount").value || 1));
+      // try to load published sheet automatically
+      loadCsvFromUrl(PUBLISHED_CSV);
+    });
+
+    // Recipient controls
+    document.getElementById("setRecipientCount").addEventListener("click", () => {
+      const n = Math.max(1, Number(document.getElementById("recipientCount").value || 1));
+      document.getElementById("recipientCount").value = String(n);
+      ensureRecipientInputs(n);
+    });
+    document.getElementById("addRecipient").addEventListener("click", () => {
+      const wrap = document.getElementById("recipientsWrap");
+      ensureRecipientInputs(wrap.querySelectorAll('input[type="email"]').length + 1);
+      document.getElementById("recipientCount").value = String(wrap.querySelectorAll('input[type="email"]').length);
+    });
+    document.getElementById("removeRecipient").addEventListener("click", () => {
+      const wrap = document.getElementById("recipientsWrap");
+      const current = wrap.querySelectorAll('input[type="email"]').length;
+      ensureRecipientInputs(Math.max(1, current - 1));
+      document.getElementById("recipientCount").value = String(wrap.querySelectorAll('input[type="email"]').length);
+    });
+
+    // Packaging controls
+    document.getElementById("downloadNowBtn").addEventListener("click", packageAndDownloadNow);
+    document.getElementById("schedulePackageBtn").addEventListener("click", schedulePackaging);
+
+  </script>
+</body>
+</html>
+<!-- Logout button -->
+<a href="index.html" class="logout-btn">Logout</a>
+
+<style>
+  .logout-btn {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    background: #ff4d4d;
+    color: #fff;
+    text-decoration: none;
+    padding: 8px 14px;
+    font-size: 14px;
+    border-radius: 6px;
+    transition: background 0.3s;
+  }
+  .logout-btn:hover {
+    background: #cc0000;
+  }
+</style>
